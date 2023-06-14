@@ -5,6 +5,7 @@ import pathlib
 import random
 import re
 import sys
+import textwrap
 
 import Bio.SeqIO.FastaIO
 import grequests
@@ -14,6 +15,7 @@ import requests
 SCRIPT_NAME = pathlib.Path(__file__).name
 
 BASE_URL: str = "https://iupred3.elte.hu"
+# User agent list for get_random_agent function.
 USER_AGENT_LIST = [
     # Firefox
     "Mozilla/4.0 (compatible; MSIE 9.0; Windows NT 6.1)",
@@ -35,7 +37,14 @@ USER_AGENT_LIST = [
 
 def parse_args() -> argparse.Namespace:
     """Returns a namespace with parsed command-line arguments."""
-    parser = argparse.ArgumentParser()
+    description = """A simple wrapper for iupred3 web interface. To use it csrf
+                     tokan and sessionid are required. Those can be aquired from
+                     cookie files saved by the browser after visiting the 
+                     iupred3 website. Default values for those are supplied 
+                     within the script but there is no gurantee of them working.
+                     To use the script you should find the values of your own
+                     keys."""
+    parser = argparse.ArgumentParser(description=textwrap.dedent(description))
     parser.add_argument(
         "file", type=str, help="input file with protein sequence in fasta format"
     )
