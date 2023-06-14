@@ -32,6 +32,7 @@ USER_AGENT_LIST = [
     "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:59.0) Gecko/20100101 Firefox/59.0",
 ]
 
+
 def parse_args() -> argparse.Namespace:
     """Returns a namespace with parsed command-line arguments."""
     parser = argparse.ArgumentParser()
@@ -54,7 +55,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def get_random_agent() -> str:
-    """Returns a random user agnet string."""
+    """Returns a random user agnet string from USER_AGENT_LIST constant."""
     return random.choice(USER_AGENT_LIST)
 
 
@@ -66,24 +67,40 @@ def main(args) -> int:
         print(f"{SCRIPT_NAME}: error: [Errno 2]: No such file or directory {file}")
         return 1
 
+    # Set value for cookies fields. csrftoken and sessionid are needed for
+    # verification of POST requests on iupred3 site to acess /plot endpoint.
     cookies = {"csrftoken": args.token, "sessionid": args.sessionid}
 
-    header = {"Accept": "application/xml", "Connection": "keep-alive", "User-Agent": get_random_agent()}
+    # Set headers. `Accept:` does not seem to work.
+    header = {
+        "Accept": "application/json",
+        "Connection": "keep-alive",
+        "User-Agent": get_random_agent(),
+    }
 
+    # Data passed with POST request. I don't know if other fields need to be
+    # an empty string, but I'm gonna leave them as such to be safe.
     data = {
         "email": "",
         "accession": "",
         "inp_seq": "",
         "aln_file": "",
-        "csrfmiddlewaretoken": args.token,
+        "csrfmiddlewaretoken": args.token,  # This also needs to be here for some reason.
     }
 
+    # requests need to be within the same session to keep them alive. This is
+    # necessary to acquire the jsons from the second series of requests.
     with requests.Session() as session:
+        # Set header for the session.
         session.headers.update(header)
         rs = []
+        # Read sequences from input file and create an asynchronous request for
+        # each sequence. This script does not keep track of sequence identifiers.
         with open(file, "r") as f:
             for record in Bio.SeqIO.FastaIO.SimpleFastaParser(f):
+                # Overwrite the `inp_seq` in data directory to pass it to request
                 data["inp_seq"] = record[1]
+                # Construct post request and append it to rs.
                 rs.append(
                     grequests.post(
                         f"{BASE_URL}/plot",
@@ -94,15 +111,24 @@ def main(args) -> int:
                     )
                 )
 
+        # Make requests from rs asynchronously and collect response objects.
         responses = grequests.map(rs)
+
+        # Regular expression used to find id of json file, generated for request.
         json_id_re = re.compile(r'raw_json(%[A-Z0-9]+)"')
+
         rs2 = []
+        # For each response create new request that will retrieve json file with
+        # the results. This needs to be one because json is not returned normally
+        # by iupred3 web service.
         for r in responses:
+            # get id for raw_json endpoint.
             line = [line for line in r.text.split("\n") if "raw_json" in line][
                 0
             ].strip()
             match = json_id_re.search(line)
             if match is not None:
+                # Create get requests and append them to rs2.
                 rs2.append(
                     grequests.get(
                         f"{BASE_URL}/raw_json{match[1]}",
@@ -111,8 +137,11 @@ def main(args) -> int:
                     )
                 )
 
+        # Make requests from rs2 asynchronously.
         responses2 = grequests.map(rs2)
 
+    # For each response retrieve the resulting values, and construct the
+    # string representing the disordered domains, then print it.
     for r in responses2:
         data = r.json()
         disordered = ""
@@ -127,5 +156,6 @@ def main(args) -> int:
     return 0
 
 
+# Only run main if this module is executed as a top level module.
 if __name__ == "__main__":
     sys.exit(main(parse_args()))
