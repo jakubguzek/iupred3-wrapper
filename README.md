@@ -2,7 +2,7 @@
 
 This repository contains simple wrapper script for iupred3 web interface.
 
-One needs to supply it with a csrf token and sessionid values from cookie file generated when visiting (iupred3)[https://iupred3.elte.hu/]. Those values can be found by using Developer Tools in Browser.
+One needs to supply it with a csrf token and sessionid values from cookie file generated when visiting [iupred3](https://iupred3.elte.hu/). Those values can be found by using Developer Tools in Browser.
 
 ## Firefox
 
