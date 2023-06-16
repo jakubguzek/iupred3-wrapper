@@ -76,11 +76,7 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="a path to firefox cookies sqlite databse file",
     )
-    parser.add_argument(
-        "--verbose",
-        action="store_true", 
-        help="print verbose output"
-    )
+    parser.add_argument("--verbose", action="store_true", help="print verbose output")
     return parser.parse_args()
 
 
@@ -104,6 +100,8 @@ def get_db_file(firefox_profile_dirs: list[str]) -> pathlib.Path:
 def find_cookies_db(args: argparse.Namespace) -> pathlib.Path:
     """Tries to return a path to the sqlite cookies database."""
     if not args.firefox_cookies_path:
+        if args.verbose:
+            print("Searching for firefox cookies.sqlite file.")
         return get_db_file(FiREFOX_PROFILE_DIRS)
     else:
         cookies_db = pathlib.Path(args.firefox_cookies_path)
@@ -115,12 +113,18 @@ def find_cookies_db(args: argparse.Namespace) -> pathlib.Path:
 
 
 # raises CookiesUnavailibleError
-def get_values_from_cookies(db_file: pathlib.Path) -> dict[str, str]:
+def get_values_from_cookies(
+    db_file: pathlib.Path, args: argparse.Namespace
+) -> dict[str, str]:
     TMP_DB_NAME = "cookies_tmp.sqlite"
     QUERY = "select name, value from moz_cookies where host = 'iupred3.elte.hu'"
     tmp_path = pathlib.Path(f"./{TMP_DB_NAME}")
     try:
+        if args.verbose:
+            print("Creating temporary copy of the cookies database.")
         shutil.copy(db_file, tmp_path)
+        if args.verbose:
+            print("Querying the cookies database for csrftoken and sessionid values.")
         connection = sqlite3.connect(tmp_path)
         cursor = connection.cursor()
         rows = cursor.execute(QUERY).fetchall()
@@ -128,7 +132,8 @@ def get_values_from_cookies(db_file: pathlib.Path) -> dict[str, str]:
     except Exception as e:
         raise CookiesUnavailibleError from e
     finally:
-        print("Cleaning up...")
+        if args.verbose:
+            print("Cleaning up temporary files.")
         os.remove(tmp_path)
 
 
@@ -148,7 +153,7 @@ def main(args) -> int:
             return 1
 
         try:
-            cookies = get_values_from_cookies(cookies_db)
+            cookies = get_values_from_cookies(cookies_db, args)
         except CookiesUnavailibleError as e:
             print(f"{SCRIPT_NAME}: error: Unable to read or parse cookies")
             if args.debug:
@@ -181,6 +186,10 @@ def main(args) -> int:
         # Set header for the session.
         session.headers.update(header)
         rs = []
+
+        if args.verbose:
+            print(f"Reading sequences from {file}")
+
         # Read sequences from input file and create an asynchronous request for
         # each sequence. This script does not keep track of sequence identifiers.
         with open(file, "r") as f:
@@ -197,6 +206,9 @@ def main(args) -> int:
                         session=session,
                     )
                 )
+
+        if args.verbose:
+            print("Making POST requests to iupred3 web service.")
 
         # Make requests from rs asynchronously and collect response objects.
         responses = grequests.map(rs)
@@ -224,8 +236,14 @@ def main(args) -> int:
                     )
                 )
 
+        if args.verbose:
+            print("Getting json files from iupred3 web service.")
+
         # Make requests from rs2 asynchronously.
         responses2 = grequests.map(rs2)
+
+    if args.verbose:
+        print("Parsing resulting json files.")
 
     # For each response retrieve the resulting values, and construct the
     # string representing the disordered domains, then print it.
