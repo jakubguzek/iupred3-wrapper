@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
 import argparse
+import os
 import pathlib
 import random
 import re
 import sys
 import sqlite3
+import shutil
 import textwrap
 
 import Bio.SeqIO.FastaIO
@@ -16,6 +18,10 @@ import requests
 SCRIPT_NAME = pathlib.Path(__file__).name
 
 BASE_URL: str = "https://iupred3.elte.hu"
+FiREFOX_PROFILE_DIRS = [
+    "~/snap/firefox/common/.mozilla/firefox/",
+    "~/.mozilla/firefox/",
+]
 # User agent list for get_random_agent function.
 USER_AGENT_LIST = [
     # Firefox
@@ -34,6 +40,10 @@ USER_AGENT_LIST = [
     "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; .NET CLR 2.0.50727; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729)",
     "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:59.0) Gecko/20100101 Firefox/59.0",
 ]
+
+
+class CookiesUnavailibleError(ValueError):
+    pass
 
 
 def parse_args() -> argparse.Namespace:
@@ -66,6 +76,11 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="a path to firefox cookies sqlite databse file",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true", 
+        help="print verbose output"
+    )
     return parser.parse_args()
 
 
@@ -74,22 +89,47 @@ def get_random_agent() -> str:
     return random.choice(USER_AGENT_LIST)
 
 
-def find_cookies_db(args: argparse.Namespace) -> pathlib.Path:  # raises FileNotFoundError.
+# raises FileNotFoundError
+def get_db_file(firefox_profile_dirs: list[str]) -> pathlib.Path:
+    for dir in firefox_profile_dirs:
+        path = pathlib.Path(dir).expanduser()
+        if path.exists():
+            return next(path.expanduser().glob("*.default/cookies.sqlite"))
+    raise FileNotFoundError(
+        f"{SCRIPT_NAME}: error: Couldn't find the cookies database file."
+    )
+
+
+# raises FileNotFoundError.
+def find_cookies_db(args: argparse.Namespace) -> pathlib.Path:
     """Tries to return a path to the sqlite cookies database."""
     if not args.firefox_cookies_path:
-        if pathlib.Path("~/snap/firefox/common/.mozilla/firefox/").expanduser().exists():
-            return pathlib.Path("~/snap/firefox/common/.mozilla/firefox/").expanduser()
-        else: 
-            return pathlib.Path("~/snap/firefox/common/.mozilla/firefox/").expanduser()
+        return get_db_file(FiREFOX_PROFILE_DIRS)
     else:
         cookies_db = pathlib.Path(args.firefox_cookies_path)
         if not cookies_db.expanduser().exists():
-            raise FileNotFoundError("No such file or directory {cookies_db}")
+            raise FileNotFoundError(
+                f"{SCRIPT_NAME}: error: [Errno 2] No such file or directory {cookies_db}"
+            )
         return cookies_db
 
 
-def get_values_from_cookies(db_file: pathlib.Path):
-    raise NotImplementedError("TODO")
+# raises CookiesUnavailibleError
+def get_values_from_cookies(db_file: pathlib.Path) -> dict[str, str]:
+    TMP_DB_NAME = "cookies_tmp.sqlite"
+    QUERY = "select name, value from moz_cookies where host = 'iupred3.elte.hu'"
+    tmp_path = pathlib.Path(f"./{TMP_DB_NAME}")
+    try:
+        shutil.copy(db_file, tmp_path)
+        connection = sqlite3.connect(tmp_path)
+        cursor = connection.cursor()
+        rows = cursor.execute(QUERY).fetchall()
+        return {rows[0][0]: rows[0][1], rows[1][0]: rows[1][1]}
+    except Exception as e:
+        raise CookiesUnavailibleError from e
+    finally:
+        print("Cleaning up...")
+        os.remove(tmp_path)
 
 
 def main(args) -> int:
@@ -100,16 +140,23 @@ def main(args) -> int:
         print(f"{SCRIPT_NAME}: error: [Errno 2]: No such file or directory {file}")
         return 1
 
-    try:
-        cookies_db = find_cookies_db(args)
-    except FileNotFoundError as e:
-        print(e)
-        return 1
+    if not args.sessionid and not args.token:
+        try:
+            cookies_db = find_cookies_db(args)
+        except FileNotFoundError as e:
+            print(e)
+            return 1
 
-
-    # Set value for cookies fields. csrftoken and sessionid are needed for
-    # verification of POST requests on iupred3 site to acess /plot endpoint.
-    cookies = {"csrftoken": args.token, "sessionid": args.sessionid}
+        try:
+            cookies = get_values_from_cookies(cookies_db)
+        except CookiesUnavailibleError as e:
+            print(f"{SCRIPT_NAME}: error: Unable to read or parse cookies")
+            if args.debug:
+                print(e)
+    else:
+        # Set value for cookies fields. csrftoken and sessionid are needed for
+        # verification of POST requests on iupred3 site to acess /plot endpoint.
+        cookies = {"csrftoken": args.token, "sessionid": args.sessionid}
 
     # Set headers. `Accept:` does not seem to work.
     header = {
