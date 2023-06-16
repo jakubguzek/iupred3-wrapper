@@ -5,6 +5,7 @@ import pathlib
 import random
 import re
 import sys
+import sqlite3
 import textwrap
 
 import Bio.SeqIO.FastaIO
@@ -60,12 +61,35 @@ def parse_args() -> argparse.Namespace:
         default="x7w0cxzvzueyvhtu1ma9yt2nph81wt9y",
         help="sessionid from cookie iupred3 cookie file. Needed to make requests.",
     )
+    parser.add_argument(
+        "--firefox-cookies-path",
+        type=str,
+        help="a path to firefox cookies sqlite databse file",
+    )
     return parser.parse_args()
 
 
 def get_random_agent() -> str:
     """Returns a random user agnet string from USER_AGENT_LIST constant."""
     return random.choice(USER_AGENT_LIST)
+
+
+def find_cookies_db(args: argparse.Namespace) -> pathlib.Path:  # raises FileNotFoundError.
+    """Tries to return a path to the sqlite cookies database."""
+    if not args.firefox_cookies_path:
+        if pathlib.Path("~/snap/firefox/common/.mozilla/firefox/").expanduser().exists():
+            return pathlib.Path("~/snap/firefox/common/.mozilla/firefox/").expanduser()
+        else: 
+            return pathlib.Path("~/snap/firefox/common/.mozilla/firefox/").expanduser()
+    else:
+        cookies_db = pathlib.Path(args.firefox_cookies_path)
+        if not cookies_db.expanduser().exists():
+            raise FileNotFoundError("No such file or directory {cookies_db}")
+        return cookies_db
+
+
+def get_values_from_cookies(db_file: pathlib.Path):
+    raise NotImplementedError("TODO")
 
 
 def main(args) -> int:
@@ -75,6 +99,13 @@ def main(args) -> int:
     if not file.exists():
         print(f"{SCRIPT_NAME}: error: [Errno 2]: No such file or directory {file}")
         return 1
+
+    try:
+        cookies_db = find_cookies_db(args)
+    except FileNotFoundError as e:
+        print(e)
+        return 1
+
 
     # Set value for cookies fields. csrftoken and sessionid are needed for
     # verification of POST requests on iupred3 site to acess /plot endpoint.
