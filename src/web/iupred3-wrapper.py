@@ -19,7 +19,7 @@ import requests
 SCRIPT_NAME = pathlib.Path(__file__).name
 
 BASE_URL: str = "https://iupred3.elte.hu"
-FiREFOX_PROFILE_DIRS = [
+FIREFOX_PROFILE_DIRS = [
     "~/snap/firefox/common/.mozilla/firefox/",
     "~/.mozilla/firefox/",
 ]
@@ -107,7 +107,7 @@ def find_cookies_db(args: argparse.Namespace) -> pathlib.Path:
     if not args.firefox_cookies_path:
         if args.verbose:
             print("Searching for firefox cookies.sqlite file.")
-        return get_db_file(FiREFOX_PROFILE_DIRS)
+        return get_db_file(FIREFOX_PROFILE_DIRS)
     else:
         cookies_db = pathlib.Path(args.firefox_cookies_path)
         if not cookies_db.expanduser().exists():
