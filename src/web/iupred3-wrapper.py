@@ -87,6 +87,7 @@ def get_random_agent() -> str:
 
 # raises FileNotFoundError
 def get_db_file(firefox_profile_dirs: list[str]) -> pathlib.Path:
+    """Returns a path to the sqlite cookies database file."""
     for dir in firefox_profile_dirs:
         path = pathlib.Path(dir).expanduser()
         if path.exists():
@@ -99,6 +100,9 @@ def get_db_file(firefox_profile_dirs: list[str]) -> pathlib.Path:
 # raises FileNotFoundError.
 def find_cookies_db(args: argparse.Namespace) -> pathlib.Path:
     """Tries to return a path to the sqlite cookies database."""
+
+    # Try to find existing databse file in default locations if user didn't
+    # provide a custom database location, else use provided location.
     if not args.firefox_cookies_path:
         if args.verbose:
             print("Searching for firefox cookies.sqlite file.")
@@ -116,24 +120,38 @@ def find_cookies_db(args: argparse.Namespace) -> pathlib.Path:
 def get_values_from_cookies(
     db_file: pathlib.Path, args: argparse.Namespace
 ) -> dict[str, str]:
+    """Return a dictionary with sessionid and csrftoken values.
+
+    Raises CookiesUnavailibleError if unable to get cookies."""
+
     TMP_DB_NAME = "cookies_tmp.sqlite"
     QUERY = "select name, value from moz_cookies where host = 'iupred3.elte.hu'"
     tmp_path = pathlib.Path(f"./{TMP_DB_NAME}")
+
     try:
         if args.verbose:
             print("Creating temporary copy of the cookies database.")
+        # Create a temporary copy of firefox cookies database. This needs to be
+        # done due to firefox locking the database when its running.
         shutil.copy(db_file, tmp_path)
         if args.verbose:
             print("Querying the cookies database for csrftoken and sessionid values.")
         connection = sqlite3.connect(tmp_path)
         cursor = connection.cursor()
         rows = cursor.execute(QUERY).fetchall()
-        return {rows[0][0]: rows[0][1], rows[1][0]: rows[1][1]}
     except Exception as e:
         raise CookiesUnavailibleError from e
+    else:
+        # If only one value was extracted from the cookies database set the other
+        # one to default.
+        cookies = {"sessionid": args.sessionid, "csrftoken": args.token}
+        for k, v in rows:
+            cookies[k] = v
+        return cookies
     finally:
         if args.verbose:
             print("Cleaning up temporary files.")
+        # Remove created temporary copy of the database.
         os.remove(tmp_path)
 
 
@@ -145,13 +163,17 @@ def main(args) -> int:
         print(f"{SCRIPT_NAME}: error: [Errno 2]: No such file or directory {file}")
         return 1
 
+    # Check if user supplied valuesfor token and sessionid. If they did use those
+    # values, otherwise try to get those values from cookeis saved by firefox.
     if not args.sessionid and not args.token:
+        # Try to find the firefox cookies.sqlite.
         try:
             cookies_db = find_cookies_db(args)
         except FileNotFoundError as e:
             print(e)
             return 1
 
+        # Try to extract sessionid and csrftoken from the firefox cookies.
         try:
             cookies = get_values_from_cookies(cookies_db, args)
         except CookiesUnavailibleError as e:
