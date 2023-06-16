@@ -9,6 +9,7 @@ import sys
 import sqlite3
 import shutil
 import textwrap
+from typing import Dict, List
 
 import Bio.SeqIO.FastaIO
 import grequests
@@ -86,7 +87,7 @@ def get_random_agent() -> str:
 
 
 # raises FileNotFoundError
-def get_db_file(firefox_profile_dirs: list[str]) -> pathlib.Path:
+def get_db_file(firefox_profile_dirs: List[str]) -> pathlib.Path:
     """Returns a path to the sqlite cookies database file."""
     for dir in firefox_profile_dirs:
         path = pathlib.Path(dir).expanduser()
@@ -119,7 +120,7 @@ def find_cookies_db(args: argparse.Namespace) -> pathlib.Path:
 # raises CookiesUnavailibleError
 def get_values_from_cookies(
     db_file: pathlib.Path, args: argparse.Namespace
-) -> dict[str, str]:
+) -> Dict[str, str]:
     """Return a dictionary with sessionid and csrftoken values.
 
     Raises CookiesUnavailibleError if unable to get cookies."""
