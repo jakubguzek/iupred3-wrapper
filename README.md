@@ -6,4 +6,4 @@ One needs to supply it with a csrf token and sessionid values from cookie file g
 
 ## Firefox
 
-In Firefox to use Developer Tools, press `F12`. Then go to `Storage Tab` (you may need to press `>>` icon) and select `Cookies`. The relevant value should be there. Example values are provided in `cookies` file in this repo.
+In Firefox to use Developer Tools, press `F12`. Then go to `Storage` Tab (you may need to press `>>` icon) and select `Cookies`. The relevant value should be there. Example values are provided in `cookies` file in this repo.
