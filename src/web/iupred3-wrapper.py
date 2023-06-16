@@ -200,7 +200,7 @@ def main(args) -> int:
         "accession": "",
         "inp_seq": "",
         "aln_file": "",
-        "csrfmiddlewaretoken": args.token,  # This also needs to be here for some reason.
+        "csrfmiddlewaretoken": cookies["csrftoken"],  # This also needs to be here for some reason.
     }
 
     # requests need to be within the same session to keep them alive. This is
