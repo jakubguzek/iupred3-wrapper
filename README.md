@@ -12,5 +12,5 @@ Only cookies saved by the Firefox browser can be used. Other browsers are not su
 
 ## Firefox
 
-`csrftoken` and `sessionid` still can be supplied manually. Those values can be found by using Developer Tools in Browser.
-In Firefox to use Developer Tools, press `F12`. Then go to `Storage` Tab (you may need to press `>>` icon) and select `Cookies`. The relevant value should be there. Example values are provided in `cookies` file in this repo.
+`csrftoken` and `sessionid` can still be supplied manually. Those values can be found by using Developer Tools in Browser.
+In Firefox to use Developer Tools, press `F12`. Then go to `Storage` Tab (you may need to press `>>` icon) and select `Cookies`. The relevant value should be there. Example values are provided in `cookie` file in this repo.
